@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive PCA — Projection & Variance Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232735;
+    --border: #2e3345;
+    --text: #e4e6f0;
+    --text-dim: #8b8fa3;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108,92,231,0.25);
+    --teal: #00cec9;
+    --teal-glow: rgba(0,206,201,0.2);
+    --red: #ff6b6b;
+    --red-glow: rgba(255,107,107,0.15);
+    --green: #00b894;
+    --orange: #fdcb6e;
+    --blue: #74b9ff;
+    --radius: 14px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ===== HEADER ===== */
+header {
+    text-align: center;
+    padding: 36px 20px 24px;
+    background: linear-gradient(180deg, rgba(108,92,231,0.08) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+}
+header h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+}
+header p { color: var(--text-dim); font-size: 0.95rem; max-width: 700px; margin: 0 auto; }
+
+/* ===== MAIN LAYOUT ===== */
+.app {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    max-width: 1280px;
+    margin: 28px auto;
+    padding: 0 24px;
+}
+
+/* ===== CANVAS AREA ===== */
+.canvas-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1;
+}
+canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+/* ===== RIGHT PANEL ===== */
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+}
+.card h3 {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+}
+
+/* Variance display */
+.variance-display {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.variance-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.2rem;
+    font-weight: 700;
+    transition: color 0.3s;
+}
+.variance-label { font-size: 0.85rem; color: var(--text-dim); }
+.variance-bar-wrap {
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+.variance-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.25s ease, background 0.3s;
+    background: linear-gradient(90deg, var(--red), var(--orange), var(--green));
+}
+
+/* Angle slider */
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+}
+.slider-row label { font-size: 0.85rem; white-space: nowrap; }
+.slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.angle-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    min-width: 48px;
+    text-align: right;
+    color: var(--accent);
+}
+
+/* Buttons */
+.btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn {
+    flex: 1;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent), #8e7cf7);
+    color: #fff;
+    box-shadow: 0 4px 16px var(--accent-glow);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px var(--accent-glow); }
+.btn-teal {
+    background: linear-gradient(135deg, var(--teal), #55efc4);
+    color: var(--bg);
+    box-shadow: 0 4px 16px var(--teal-glow);
+}
+.btn-teal:hover { transform: translateY(-1px); }
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+}
+.btn-outline:hover { border-color: var(--accent); color: var(--text); }
+
+/* Math card */
+.math-card { font-size: 0.82rem; line-height: 1.7; }
+.math-card .math-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--surface2);
+    padding: 6px 10px;
+    border-radius: 8px;
+    margin: 5px 0;
+    word-break: break-all;
+    color: var(--blue);
+}
+.math-card .step-label {
+    font-weight: 600;
+    color: var(--teal);
+    margin-top: 10px;
+    display: block;
+}
+.math-card .result {
+    color: var(--green);
+    font-weight: 600;
+}
+.eigvec-highlight { color: var(--accent); font-weight: 600; }
+.eigval-highlight { color: var(--orange); font-weight: 600; }
+
+/* Footer hint */
+.hint {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    padding: 8px 0 32px;
+    opacity: 0.7;
+}
+.hint kbd {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+
+/* Legend on canvas */
+.legend {
+    position: absolute;
+    top: 14px; left: 14px;
+    background: rgba(15,17,23,0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.75rem;
+    line-height: 1.8;
+    pointer-events: none;
+}
+.legend-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .canvas-wrap { aspect-ratio: auto; height: 420px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+    <h1>🔬 Interactive PCA Explorer</h1>
+    <p>Drag the projection line to see how variance changes. Click on the canvas to add data points. Watch the math update in real-time!</p>
+</header>
+
+<div class="app">
+    <!-- LEFT: Canvas -->
+    <div class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+        <div class="legend">
+            <span class="legend-dot" style="background:#74b9ff"></span> Original Data Points<br>
+            <span class="legend-dot" style="background:#ff6b6b"></span> Projection Line (drag to rotate)<br>
+            <span class="legend-dot" style="background:#00cec9"></span> Projected Shadows<br>
+            <span class="legend-dot" style="background:rgba(108,92,231,0.5)"></span> Drop Lines (90° angle)
+        </div>
+    </div>
+
+    <!-- RIGHT: Controls & Math -->
+    <div class="panel">
+
+        <!-- Variance Gauge -->
+        <div class="card">
+            <h3>📊 Projected Variance</h3>
+            <div class="variance-display">
+                <span class="variance-value" id="varianceVal">0.00</span>
+                <span class="variance-label">/ <span id="maxVarianceVal">0.00</span> max possible</span>
+            </div>
+            <div class="variance-bar-wrap">
+                <div class="variance-bar" id="varianceBar" style="width:0%"></div>
+            </div>
+            <div style="margin-top:8px;font-size:0.78rem;color:var(--text-dim)">
+                Explained: <strong id="explainedPct">0%</strong> of total variance
+            </div>
+        </div>
+
+        <!-- Angle Control -->
+        <div class="card">
+            <h3>🎯 Projection Angle</h3>
+            <div class="slider-row">
+                <label>θ =</label>
+                <input type="range" id="angleSlider" min="0" max="180" step="0.5" value="45">
+                <span class="angle-val" id="angleVal">45°</span>
+            </div>
+            <div class="btn-row" style="margin-top:12px">
+                <button class="btn btn-teal" id="btnPCA">✨ Snap to PCA (Best)</button>
+                <button class="btn btn-outline" id="btnWorst">💀 Snap to Worst</button>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="card">
+            <h3>⚙️ Data Controls</h3>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btnPreset1">Diagonal Cloud</button>
+                <button class="btn btn-primary" id="btnPreset2">L-Shape</button>
+                <button class="btn btn-outline" id="btnClear">Clear All</button>
+            </div>
+            <div style="margin-top:10px;font-size:0.78rem;color:var(--text-dim)">
+                Points: <strong id="pointCount">0</strong> &nbsp;|&nbsp; Click canvas to add, right-click to remove
+            </div>
+        </div>
+
+        <!-- Live Math -->
+        <div class="card math-card" id="mathCard">
+            <h3>📐 Step-by-Step Math (Live)</h3>
+            <div id="mathContent">
+                <span style="color:var(--text-dim)">Add at least 2 points to see calculations...</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="hint">
+    <kbd>Click</kbd> canvas to add points &nbsp;·&nbsp; <kbd>Right-click</kbd> to remove &nbsp;·&nbsp; Drag the red line handle to rotate
+</div>
+
+<script>
+// =====================================================================
+// INTERACTIVE PCA VISUALIZATION
+// =====================================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// State
+let points = [];                // [{x, y}] in data coordinates (centered around 0)
+let angle = Math.PI / 4;       // projection angle in radians
+let draggingHandle = false;
+let hoverHandle = false;
+
+// Canvas sizing
+const PADDING = 60;
+let W, H, CX, CY, SCALE;
+
+function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    W = rect.width;
+    H = rect.height;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    CX = W / 2;
+    CY = H / 2;
+    SCALE = Math.min(W, H) / 12;  // 1 data unit = SCALE px
+    draw();
+}
+
+// Coordinate transforms
+function dataToCanvas(x, y) {
+    return [CX + x * SCALE, CY - y * SCALE];
+}
+function canvasToData(cx, cy) {
+    return [(cx - CX) / SCALE, -(cy - CY) / SCALE];
+}
+
+// =====================================================================
+// MATH FUNCTIONS
+// =====================================================================
+
+function centerData(pts) {
+    if (pts.length === 0) return { centered: [], mx: 0, my: 0 };
+    let mx = 0, my = 0;
+    for (const p of pts) { mx += p.x; my += p.y; }
+    mx /= pts.length; my /= pts.length;
+    const centered = pts.map(p => ({ x: p.x - mx, y: p.y - my }));
+    return { centered, mx, my };
+}
+
+function covarianceMatrix(pts) {
+    // pts should be centered
+    const n = pts.length;
+    if (n < 2) return { s11: 0, s12: 0, s22: 0 };
+    let s11 = 0, s12 = 0, s22 = 0;
+    for (const p of pts) {
+        s11 += p.x * p.x;
+        s12 += p.x * p.y;
+        s22 += p.y * p.y;
+    }
+    // Using 1/n (not 1/(n-1)) to match the slide's X^T X formulation
+    return { s11: s11 / n, s12: s12 / n, s22: s22 / n };
+}
+
+function eigenDecomposition(s11, s12, s22) {
+    // For a 2x2 symmetric matrix [[s11, s12], [s12, s22]]
+    const trace = s11 + s22;
+    const det = s11 * s22 - s12 * s12;
+    const disc = Math.sqrt(Math.max(0, trace * trace / 4 - det));
+    const l1 = trace / 2 + disc;  // larger
+    const l2 = trace / 2 - disc;  // smaller
+
+    // Eigenvector for l1
+    let v1x, v1y;
+    if (Math.abs(s12) > 1e-10) {
+        v1x = l1 - s22;
+        v1y = s12;
+    } else if (s11 >= s22) {
+        v1x = 1; v1y = 0;
+    } else {
+        v1x = 0; v1y = 1;
+    }
+    const len1 = Math.sqrt(v1x * v1x + v1y * v1y);
+    v1x /= len1; v1y /= len1;
+
+    // Eigenvector for l2 (perpendicular)
+    let v2x = -v1y, v2y = v1x;
+
+    return { l1, l2, v1: { x: v1x, y: v1y }, v2: { x: v2x, y: v2y } };
+}
+
+function projectOntoDirection(pts, ux, uy) {
+    return pts.map(p => p.x * ux + p.y * uy);
+}
+
+function variance(arr) {
+    if (arr.length < 1) return 0;
+    let m = 0;
+    for (const v of arr) m += v;
+    m /= arr.length;
+    let s = 0;
+    for (const v of arr) s += (v - m) * (v - m);
+    return s / arr.length;
+}
+
+// =====================================================================
+// DRAWING
+// =====================================================================
+
+function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Background grid
+    drawGrid();
+
+    // Get direction vector
+    const ux = Math.cos(angle), uy = Math.sin(angle);
+
+    // Center data
+    const { centered, mx, my } = centerData(points);
+
+    // Draw projection line (extending across canvas)
+    const lineLen = Math.max(W, H);
+    const [lx1, ly1] = dataToCanvas(ux * -8, uy * -8);
+    const [lx2, ly2] = dataToCanvas(ux * 8, uy * 8);
+
+    // Line glow
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,107,107,0.15)';
+    ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.moveTo(lx1, ly1); ctx.lineTo(lx2, ly2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,107,107,0.6)';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.moveTo(lx1, ly1); ctx.lineTo(lx2, ly2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Draw u vector (thick red arrow)
+    const [ux1, uy1] = dataToCanvas(0, 0);
+    const [ux2, uy2] = dataToCanvas(ux * 1.8, uy * 1.8);
+    drawArrow(ux1, uy1, ux2, uy2, '#ff6b6b', 3);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.font = '600 14px Inter';
+    ctx.fillText('u', ux2 + 8, uy2 - 8);
+
+    // Draw drag handle
+    const [hx, hy] = dataToCanvas(ux * 3.5, uy * 3.5);
+    ctx.beginPath();
+    ctx.arc(hx, hy, hoverHandle ? 14 : 10, 0, Math.PI * 2);
+    ctx.fillStyle = hoverHandle ? 'rgba(255,107,107,0.5)' : 'rgba(255,107,107,0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Draw projections and drop lines
+    for (const p of centered) {
+        const dot = p.x * ux + p.y * uy;  // scalar projection
+        const projX = dot * ux;
+        const projY = dot * uy;
+
+        const [px, py] = dataToCanvas(p.x, p.y);
+        const [prx, pry] = dataToCanvas(projX, projY);
+
+        // Drop line
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(108,92,231,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.moveTo(px, py); ctx.lineTo(prx, pry);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Right-angle marker
+        drawRightAngle(prx, pry, px, py, ux, uy);
+
+        // Shadow point
+        ctx.beginPath();
+        ctx.arc(prx, pry, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#00cec9';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,206,201,0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // Draw data points (on top)
+    for (const p of centered) {
+        const [px, py] = dataToCanvas(p.x, p.y);
+        ctx.beginPath();
+        ctx.arc(px, py, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#74b9ff';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(116,185,255,0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // Origin marker
+    const [ox, oy] = dataToCanvas(0, 0);
+    ctx.beginPath();
+    ctx.arc(ox, oy, 3, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fill();
+
+    // Update math
+    updateUI(centered, ux, uy);
+}
+
+function drawGrid() {
+    ctx.strokeStyle = 'rgba(46,51,69,0.5)';
+    ctx.lineWidth = 1;
+    for (let i = -6; i <= 6; i++) {
+        const [x1, y1] = dataToCanvas(i, -6);
+        const [x2, y2] = dataToCanvas(i, 6);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        const [x3, y3] = dataToCanvas(-6, i);
+        const [x4, y4] = dataToCanvas(6, i);
+        ctx.beginPath(); ctx.moveTo(x3, y3); ctx.lineTo(x4, y4); ctx.stroke();
+    }
+    // Axes
+    ctx.strokeStyle = 'rgba(139,143,163,0.4)';
+    ctx.lineWidth = 1.5;
+    const [ax1, ay1] = dataToCanvas(-6, 0);
+    const [ax2, ay2] = dataToCanvas(6, 0);
+    ctx.beginPath(); ctx.moveTo(ax1, ay1); ctx.lineTo(ax2, ay2); ctx.stroke();
+    const [ax3, ay3] = dataToCanvas(0, -6);
+    const [ax4, ay4] = dataToCanvas(0, 6);
+    ctx.beginPath(); ctx.moveTo(ax3, ay3); ctx.lineTo(ax4, ay4); ctx.stroke();
+
+    // Axis labels
+    ctx.fillStyle = 'rgba(139,143,163,0.6)';
+    ctx.font = '500 12px Inter';
+    ctx.fillText('Feature 1', ax2 - 60, ay2 - 8);
+    ctx.fillText('Feature 2', ax4 + 8, ay4 + 16);
+}
+
+function drawArrow(x1, y1, x2, y2, color, width) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = dx / len, uy = dy / len;
+    const headLen = 12;
+
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headLen * ux + 5 * uy, y2 - headLen * uy - 5 * ux);
+    ctx.lineTo(x2 - headLen * ux - 5 * uy, y2 - headLen * uy + 5 * ux);
+    ctx.fill();
+}
+
+function drawRightAngle(px, py, fromX, fromY, ux, uy) {
+    const size = 8;
+    // Direction from proj to point
+    const dx = fromX - px, dy = fromY - py;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) return;
+    const nx = dx / len, ny = dy / len;
+    // Direction along line (in canvas coords: ux, -uy because Y is flipped)
+    const lx = ux * SCALE, ly = -uy * SCALE;
+    const llen = Math.sqrt(lx * lx + ly * ly);
+    const lnx = lx / llen, lny = ly / llen;
+
+    const p1x = px + nx * size, p1y = py + ny * size;
+    const p2x = px + lnx * size, p2y = py + lny * size;
+    const p3x = px + nx * size + lnx * size, p3y = py + ny * size + lny * size;
+
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(139,143,163,0.4)';
+    ctx.lineWidth = 1;
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p3x, p3y);
+    ctx.lineTo(p2x, p2y);
+    ctx.stroke();
+}
+
+// =====================================================================
+// UI UPDATES
+// =====================================================================
+
+function updateUI(centered, ux, uy) {
+    const projections = projectOntoDirection(centered, ux, uy);
+    const currentVar = variance(projections);
+
+    // Eigendecomposition for max/min variance
+    const cov = covarianceMatrix(centered);
+    const eig = eigenDecomposition(cov.s11, cov.s12, cov.s22);
+    const maxVar = eig.l1;
+    const minVar = eig.l2;
+    const totalVar = cov.s11 + cov.s22;
+
+    // Variance display
+    const varEl = document.getElementById('varianceVal');
+    varEl.textContent = currentVar.toFixed(3);
+    const pct = maxVar > 0 ? (currentVar / maxVar) * 100 : 0;
+    // Color based on percentage
+    if (pct > 85) varEl.style.color = 'var(--green)';
+    else if (pct > 50) varEl.style.color = 'var(--orange)';
+    else varEl.style.color = 'var(--red)';
+
+    document.getElementById('maxVarianceVal').textContent = maxVar.toFixed(3);
+    document.getElementById('varianceBar').style.width = Math.min(100, pct).toFixed(1) + '%';
+    document.getElementById('explainedPct').textContent = totalVar > 0 ? ((currentVar / totalVar) * 100).toFixed(1) + '%' : '0%';
+
+    // Angle display
+    let deg = (angle * 180 / Math.PI) % 360;
+    if (deg < 0) deg += 360;
+    document.getElementById('angleVal').textContent = deg.toFixed(1) + '°';
+    document.getElementById('angleSlider').value = deg > 180 ? deg - 180 : deg;
+
+    // Point count
+    document.getElementById('pointCount').textContent = points.length;
+
+    // Math card
+    updateMath(centered, cov, eig, ux, uy, projections, currentVar);
+}
+
+function updateMath(centered, cov, eig, ux, uy, projections, currentVar) {
+    const el = document.getElementById('mathContent');
+    if (centered.length < 2) {
+        el.innerHTML = '<span style="color:var(--text-dim)">Add at least 2 points to see calculations...</span>';
+        return;
+    }
+
+    const n = centered.length;
+    const fmt = v => v >= 0 ? v.toFixed(3) : v.toFixed(3);
+
+    let html = '';
+
+    // Step 1: Data
+    html += `<span class="step-label">Step 1: Centered Data (${n} points)</span>`;
+    html += `<div class="math-line">`;
+    for (let i = 0; i < Math.min(n, 6); i++) {
+        html += `(${fmt(centered[i].x)}, ${fmt(centered[i].y)})`;
+        if (i < Math.min(n, 6) - 1) html += ', ';
+    }
+    if (n > 6) html += `, ... (${n - 6} more)`;
+    html += `</div>`;
+
+    // Step 2: Covariance
+    html += `<span class="step-label">Step 2: Covariance Matrix (X<sup>T</sup>X / n)</span>`;
+    html += `<div class="math-line">[ ${fmt(cov.s11)}  ${fmt(cov.s12)} ]<br>[ ${fmt(cov.s12)}  ${fmt(cov.s22)} ]</div>`;
+
+    // Step 3: Eigenvalues
+    html += `<span class="step-label">Step 3: Eigenvalues</span>`;
+    html += `<div class="math-line"><span class="eigval-highlight">λ₁ = ${eig.l1.toFixed(4)}</span>  &nbsp;  <span class="eigval-highlight">λ₂ = ${eig.l2.toFixed(4)}</span></div>`;
+
+    // Step 4: Eigenvectors
+    html += `<span class="step-label">Step 4: Eigenvectors (PC Directions)</span>`;
+    html += `<div class="math-line"><span class="eigvec-highlight">PC1</span> = (${fmt(eig.v1.x)}, ${fmt(eig.v1.y)}) → angle ${(Math.atan2(eig.v1.y, eig.v1.x) * 180 / Math.PI).toFixed(1)}°</div>`;
+    html += `<div class="math-line"><span class="eigvec-highlight">PC2</span> = (${fmt(eig.v2.x)}, ${fmt(eig.v2.y)}) → angle ${(Math.atan2(eig.v2.y, eig.v2.x) * 180 / Math.PI).toFixed(1)}°</div>`;
+
+    // Step 5: Current projection
+    html += `<span class="step-label">Step 5: Your Projection (u = (${fmt(ux)}, ${fmt(uy)}))</span>`;
+    html += `<div class="math-line">Variance = u<sup>T</sup>(X<sup>T</sup>X)u = <span class="result">${currentVar.toFixed(4)}</span></div>`;
+
+    // Comparison
+    const totalVar = cov.s11 + cov.s22;
+    html += `<span class="step-label">⚡ Comparison</span>`;
+    html += `<div class="math-line" style="background:rgba(0,184,148,0.1);border:1px solid rgba(0,184,148,0.2)">`;
+    html += `✅ PCA Best: <span class="result">${eig.l1.toFixed(4)}</span> (${totalVar > 0 ? ((eig.l1/totalVar)*100).toFixed(1) : 0}% explained)<br>`;
+    html += `❌ Worst: ${eig.l2.toFixed(4)} (${totalVar > 0 ? ((eig.l2/totalVar)*100).toFixed(1) : 0}% explained)<br>`;
+    html += `🎯 You now: ${currentVar.toFixed(4)} (${totalVar > 0 ? ((currentVar/totalVar)*100).toFixed(1) : 0}% explained)`;
+    html += `</div>`;
+
+    el.innerHTML = html;
+}
+
+// =====================================================================
+// INTERACTION
+// =====================================================================
+
+function getHandlePos() {
+    const ux = Math.cos(angle), uy = Math.sin(angle);
+    return dataToCanvas(ux * 3.5, uy * 3.5);
+}
+
+canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    if (draggingHandle) {
+        const [dx, dy] = canvasToData(mx, my);
+        angle = Math.atan2(dy, dx);
+        draw();
+        return;
+    }
+
+    // Check hover on handle
+    const [hx, hy] = getHandlePos();
+    const dist = Math.sqrt((mx - hx) ** 2 + (my - hy) ** 2);
+    const wasHover = hoverHandle;
+    hoverHandle = dist < 18;
+    if (wasHover !== hoverHandle) draw();
+    canvas.style.cursor = hoverHandle ? 'grab' : 'crosshair';
+});
+
+canvas.addEventListener('mousedown', e => {
+    if (e.button === 2) return; // right-click handled separately
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    const [hx, hy] = getHandlePos();
+    if (Math.sqrt((mx - hx) ** 2 + (my - hy) ** 2) < 18) {
+        draggingHandle = true;
+        canvas.style.cursor = 'grabbing';
+        return;
+    }
+
+    // Add point
+    const [dx, dy] = canvasToData(mx, my);
+    points.push({ x: dx, y: dy });
+    draw();
+});
+
+canvas.addEventListener('mouseup', () => {
+    draggingHandle = false;
+    canvas.style.cursor = hoverHandle ? 'grab' : 'crosshair';
+});
+
+canvas.addEventListener('mouseleave', () => {
+    draggingHandle = false;
+    hoverHandle = false;
+});
+
+// Right-click to remove nearest point
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const { centered, mx: cmx, my: cmy } = centerData(points);
+
+    let minDist = Infinity, minIdx = -1;
+    for (let i = 0; i < centered.length; i++) {
+        const [px, py] = dataToCanvas(centered[i].x, centered[i].y);
+        const d = Math.sqrt((mx - px) ** 2 + (my - py) ** 2);
+        if (d < minDist && d < 30) { minDist = d; minIdx = i; }
+    }
+    if (minIdx >= 0) {
+        points.splice(minIdx, 1);
+        draw();
+    }
+});
+
+// Angle slider
+document.getElementById('angleSlider').addEventListener('input', e => {
+    angle = parseFloat(e.target.value) * Math.PI / 180;
+    draw();
+});
+
+// PCA button
+document.getElementById('btnPCA').addEventListener('click', () => {
+    if (points.length < 2) return;
+    const { centered } = centerData(points);
+    const cov = covarianceMatrix(centered);
+    const eig = eigenDecomposition(cov.s11, cov.s12, cov.s22);
+    animateAngle(Math.atan2(eig.v1.y, eig.v1.x));
+});
+
+// Worst button
+document.getElementById('btnWorst').addEventListener('click', () => {
+    if (points.length < 2) return;
+    const { centered } = centerData(points);
+    const cov = covarianceMatrix(centered);
+    const eig = eigenDecomposition(cov.s11, cov.s12, cov.s22);
+    animateAngle(Math.atan2(eig.v2.y, eig.v2.x));
+});
+
+function animateAngle(target) {
+    // Normalize angles
+    let from = angle % (Math.PI * 2);
+    let to = target % (Math.PI * 2);
+    if (from < 0) from += Math.PI * 2;
+    if (to < 0) to += Math.PI * 2;
+
+    // Find shortest path
+    let diff = to - from;
+    if (diff > Math.PI) diff -= Math.PI * 2;
+    if (diff < -Math.PI) diff += Math.PI * 2;
+
+    const duration = 500;
+    const start = performance.now();
+    const startAngle = angle;
+
+    function tick(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        angle = startAngle + diff * ease;
+        draw();
+        if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+}
+
+// Presets
+function loadPreset(pts) {
+    points = pts;
+    angle = Math.PI / 4;
+    draw();
+}
+
+document.getElementById('btnPreset1').addEventListener('click', () => {
+    loadPreset([
+        {x:-3, y:-2.5}, {x:-2, y:-1.8}, {x:-1.5, y:-0.8},
+        {x:-0.5, y:-0.2}, {x:0.5, y:0.8}, {x:1, y:0.5},
+        {x:1.8, y:1.5}, {x:2.5, y:2.2}, {x:3, y:2.8},
+        {x:-2.5, y:-1.5}, {x:0, y:0.3}, {x:2, y:1.8},
+        {x:-1, y:-1.2}, {x:1.5, y:1.0}, {x:3.5, y:3.0}
+    ]);
+});
+
+document.getElementById('btnPreset2').addEventListener('click', () => {
+    loadPreset([
+        {x:-3, y:2}, {x:-2.5, y:2.2}, {x:-2, y:1.8}, {x:-1.5, y:2.1},
+        {x:-1, y:2.0}, {x:-0.5, y:1.9}, {x:0, y:2.0},
+        {x:0, y:1.5}, {x:0.2, y:1.0}, {x:0.1, y:0.5},
+        {x:0, y:0}, {x:-0.1, y:-0.5}, {x:0.2, y:-1.0},
+        {x:0, y:-1.5}, {x:0.1, y:-2.0}
+    ]);
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+    points = [];
+    draw();
+});
+
+// =====================================================================
+// INIT
+// =====================================================================
+
+window.addEventListener('resize', resize);
+resize();
+
+// Load default preset
+document.getElementById('btnPreset1').click();
+</script>
+</body>
+</html>
